@@ -14,7 +14,7 @@ export class Storage extends Construct {
     super(scope, id);
 
     this.bucket = new S3Bucket(this, "lks_bucket", {
-      bucket: "lks-abyandimas-tegal-jawatengah",
+      bucket: "lks-abyandimas-tegal-jawatengah-2026",
     });
 
     new S3BucketLifecycleConfiguration(this, "bucket_lifecycle", {
@@ -39,38 +39,68 @@ export class Storage extends Construct {
       ],
     });
 
+    const paymentQueueDlq = new SqsQueue(this, "payment_queue_dlq", {
+      name: "payment-queue-dlq-abyandimas-2025",
+    });
+
     this.queue = new SqsQueue(this, "payment_queue", {
-      name: "payment-queue",
+      name: "payment-queue-abyandimas-2025",
+      maxMessageSize: 262144,
+      visibilityTimeoutSeconds: 30,
+      receiveWaitTimeSeconds: 10,
+      messageRetentionSeconds: 172800,
+      redrivePolicy: JSON.stringify({
+        deadLetterTargetArn: paymentQueueDlq.arn,
+        maxReceiveCount: 5,
+      }),
     });
 
-    new S3BucketNotification(this, "bucket_notification", {
-      bucket: this.bucket.id,
-      queue: [
-        {
-          queueArn: this.queue.arn,
-          events: ["s3:ObjectCreated:*"],
-          filterPrefix: "proofOfPayment/",
-        },
-      ],
-    });
-
-    new SqsQueuePolicy(this, "sqs_policy", {
+    // @ts-ignore
+    const sqsPolicy = new SqsQueuePolicy(this, "sqs_policy", {
       queueUrl: this.queue.id,
       policy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [
           {
             Effect: "Allow",
-            Principal: "*",
+            Principal: {
+              Service: "s3.amazonaws.com",
+            },
             Action: "sqs:SendMessage",
             Resource: this.queue.arn,
             Condition: {
               ArnEquals: { "aws:SourceArn": this.bucket.arn },
             },
           },
+          {
+            Effect: "Allow",
+            Principal: {
+              AWS: "012578104688",
+            },
+            Action: "sqs:*",
+            Resource: this.queue.arn,
+          },
         ],
       }),
     });
+
+    // @ts-ignore
+    const bucketNotification = new S3BucketNotification(
+      this,
+      "bucket_notification",
+      {
+        bucket: this.bucket.id,
+        queue: [
+          {
+            queueArn: this.queue.arn,
+            events: ["s3:ObjectCreated:*"],
+            filterPrefix: "proofOfPayment/",
+          },
+        ],
+      },
+    );
+
+
 
     new TerraformOutput(this, "s3_bucket_name", {
       value: this.bucket.bucket,
@@ -89,4 +119,3 @@ export class Storage extends Construct {
     });
   }
 }
-

@@ -6,6 +6,7 @@ import { Network } from "../constructs/network";
 import { Database } from "../constructs/database";
 import { Storage } from "../constructs/storage";
 import { DynamoDB } from "../constructs/dynamodb";
+import { LambdaDeployment } from "../constructs/lambda";
 
 export class MainStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
@@ -19,7 +20,13 @@ export class MainStack extends TerraformStack {
 
     const network = new Network(this, "Network");
     new Database(this, "Database", network);
-    new Storage(this, "Storage");
+
+    // SIMPAN STORAGE INSTANCE
+    const storage = new Storage(this, "Storage");
+
     new DynamoDB(this, "DynamoDB");
+
+    // KIRIM STORAGE KE LAMBDA
+    new LambdaDeployment(this, "Lambda", storage);
   }
 }
